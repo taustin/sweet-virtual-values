@@ -34,7 +34,7 @@ var vvalues = (function() {
             key: key,
             target: val
         });
-	    return p;
+        return p;
     }
     this.Proxy = VProxy;
 
@@ -65,7 +65,7 @@ var vvalues = (function() {
             var target = unproxyMap.get(left).target;
             return unproxyMap.get(left).handler.left(target, operator, right);
         },
-                            
+
         (operator, left, right) if isVProxy(right) => {
             var target = unproxyMap.get(right).target;
             return unproxyMap.get(right).handler.right(target, operator, left);
@@ -95,6 +95,16 @@ var vvalues = (function() {
         ("||", left, right)                        => left || right,
     }
 
+    function test(cond, branchExit) {
+      if (isVProxy(cond)) {
+        let hndl = unproxyMap.get(cond).handler;
+        if (hndl.test) {
+          return hndl.test(cond, branchExit);
+        }
+        //return unproxyMap.get(cond).handler.test(cond, branchExit);
+      }
+      return cond;
+    }
 
     // @ (Any) -> {} or null
     this.unproxy = function(value, key) {
@@ -103,9 +113,10 @@ var vvalues = (function() {
         }
         return null;
     };
-        
+
     return {
         unary: unary,
-        binary: binary
+        binary: binary,
+        test: test
     };
 })()

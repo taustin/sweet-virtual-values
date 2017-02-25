@@ -31,6 +31,13 @@ operator | 6 left { $left, $right }           => #{ vvalues.binary("|", $left, $
 operator && 5 left { $left, $right }          => #{ vvalues.binary("&&", $left, $right) }
 operator || 4 left { $left, $right }          => #{ vvalues.binary("||", $left, $right) }
 
-
-
+let if = macro {
+  rule { ($cond ...) { $body ...} } => {
+    function exit() { } // by default no-op
+    if (vvalues.test($cond..., cb => exit = cb)) {
+      $body ...
+      exit();
+    }
+  }
+}
 
