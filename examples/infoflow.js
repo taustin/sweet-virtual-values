@@ -1,6 +1,6 @@
 // vim: ts=4 sw=4
 //
-// This example follows taint.js closely, but uses additional hooks to
+// This example follows taint.js closely, but uses an assign hook to
 // prevent implicit flows leaking information.  Comments that overlap
 // with the taint.js comments have been eliminated.
 
@@ -43,10 +43,6 @@ var binaryOps = {
 
 let secretKey = {};
 
-// pcStack tracks influences on current execution,
-// which indicate implicit flows of information.
-let pcStack = [];
-
 function secret(originalValue) {
     if (isSecret(originalValue)) {
         return originalValue;
@@ -63,20 +59,16 @@ function secret(originalValue) {
         right: function(target, op, left) {
             return secret(binaryOps[op](left, target));
         },
-        test: function(cond, branchExit) {
-            if (originalValue && isSecret(cond)) {
-                pcStack.push(cond);
-                branchExit(() => {
-                    pcStack.pop();
-                });
-            }
-            return cond;
-        },
-        assign: function(left, right, assignThunk) {
-            if (pcStack.length > 0 && !isSecret(left)) {
+        assign: function(ctx, left, right, assignThunk) {
+            if (isSecret(ctx) && !isSecret(left)) {
                 throw new Error("Implicit leak");
             }
-            assignThunk(secret);
+            // Secret values may be updated in a secret context, but must stay secret
+            if (isSecret(ctx) && isSecret(left)) {
+                assignThunk(secret);
+            } else {
+                assignThunk();
+            }
         }
     }, secretKey);
     return p;
@@ -86,7 +78,7 @@ function isSecret(x) {
     return !!unproxy(x, secretKey);
 }
 
-// Code showing an (attempted) implicit leak from sec to pub.
+
 var sec1 = secret(true);
 var sec2 = secret(false);
 var pub1 = true;
@@ -117,16 +109,32 @@ if (pub1) {
 }
 console.log("public -> secret allowed");
 
-/*
-if (sec1) {
-    pub2 = secret(false);
+try {
+    if (sec1) {
+        pub2 = secret(false);
+    }
+    console.log("secret -> public allowed (this should not print)");
+} catch (e) {
+    console.log("First secret -> public leak caught");
 }
-console.log("secret -> public allowed (this should not print)");
-*/
 
-if (sec1) {
-    pub2 = false;
+try {
+    if (sec1) {
+        pub2 = false;
+    }
+    console.log("secret -> public allowed (this should not print)");
+} catch (e) {
+    console.log("Second secret -> public leak caught");
 }
-console.log("secret -> public allowed (this should not print)");
 
+try {
+    if (!sec1) {
+        sec2 = true;
+    } else {
+        pub2 = false;
+    }
+    console.log("secret -> public allowed (this should not print)");
+} catch (e) {
+    console.log("Third secret -> public leak caught");
+}
 

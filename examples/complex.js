@@ -60,10 +60,7 @@ function makeComplex(real, img) {
 }
 
 function isComplex(value) {
-    if(unproxy(value, key)) {
-        return true;
-    }
-    return false;
+  return !!unproxy(value, key);
 }
 
 var i = makeComplex(0, 1);

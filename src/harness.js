@@ -96,24 +96,33 @@ var vvalues = (function() {
         ("||", left, right)                        => left || right,
     }
 
-    function assign(left, right, assignThunk) {
-        if (isVProxy(left) && unproxyMap.get(left).handler.assign) {
-            return unproxyMap.get(left).handler.assign(left, right, assignThunk);
+    function assign(ctx, left, right, assignThunk) {
+        if (isVProxy(ctx) && unproxyMap.get(ctx).handler.assign) {
+            return unproxyMap.get(ctx).handler.assign(ctx, left, right, assignThunk);
+        } else if (isVProxy(left) && unproxyMap.get(left).handler.assign) {
+            return unproxyMap.get(left).handler.assign(ctx, left, right, assignThunk);
         } else if (isVProxy(right) && unproxyMap.get(right).handler.assign) {
-            return unproxyMap.get(right).handler.assign(left, right, assignThunk);
-        } else {
-            return assignThunk();
+            return unproxyMap.get(right).handler.assign(ctx, left, right, assignThunk);
         }
+        // No handler used if we made it here
+        return assignThunk();
     }
 
-    function test(cond, branchExit) {
-        if (isVProxy(cond)) {
-            let hndl = unproxyMap.get(cond).handler;
-            if (hndl.test) {
-                return hndl.test(cond, branchExit);
-            }
+    var ctxStack = [];
+
+    // Returns true if a proxy was pushed on the stack
+    function pushContext(x) {
+        if (isVProxy(x)) {
+            ctxStack.push(x);
+            return true;
         }
-        return cond;
+        return false;
+    }
+    function popContext() {
+        return ctxStack.pop();
+    }
+    function peekContext() {
+        return ctxStack[ctxStack.length-1];
     }
 
     // @ (Any) -> {} or null
@@ -128,6 +137,8 @@ var vvalues = (function() {
         unary: unary,
         binary: binary,
         assign: assign,
-        test: test
+        __pushContext: pushContext,
+        __popContext: popContext,
+        __peekContext: peekContext,
     };
 })()

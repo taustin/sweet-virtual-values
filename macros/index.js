@@ -34,19 +34,29 @@ operator || 4 left { $left, $right }          => #{ vvalues.binary("||", $left, 
 
 let if = macro {
     rule { ($cond ...) { $body ...} } => {
-        function exit() { } // by default no-op
-        if (vvalues.test($cond..., cb => exit = cb)) {
-            $body ...
-            exit();
+        var c = $cond...;
+        let pushedProxy = vvalues.__pushContext(c);
+        if (c) {
+            $body ...;
         }
+        if (pushedProxy) vvalues.__popContext();
+    }
+    rule { ($cond ...) { $thnBody ...} else { $elsBody ... } } => {
+        let c = $cond...;
+        let pushedProxy = vvalues.__pushContext(c);
+        if (c) {
+            $thnBody ...;
+        } else {
+            $elsBody ...;
+        }
+        if (pushedProxy) vvalues.__popContext();
     }
 }
 
 let = = macro {
     rule infix { $left:expr | $right:expr } => {
-        //let ctx = vvalues.getContext();
-        //vvalues.assign(ctx, $left, $right, (polisher) => {
-        vvalues.assign($left, $right, (polisher) => {
+        let ctx = vvalues.__peekContext();
+        vvalues.assign(ctx, $left, $right, (polisher) => {
             if (polisher) {
                 $left = polisher($right);
             } else {
