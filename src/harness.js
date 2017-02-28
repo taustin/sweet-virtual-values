@@ -1,3 +1,4 @@
+// vim: ts=4 sw=4
 var vvalues = (function() {
     if (typeof require === "function") {
         // importing patches Proxy to be in line with the new direct proxies
@@ -95,15 +96,24 @@ var vvalues = (function() {
         ("||", left, right)                        => left || right,
     }
 
-    function test(cond, branchExit) {
-      if (isVProxy(cond)) {
-        let hndl = unproxyMap.get(cond).handler;
-        if (hndl.test) {
-          return hndl.test(cond, branchExit);
+    function assign(left, right, assignThunk) {
+        if (isVProxy(left) && unproxyMap.get(left).handler.assign) {
+            return unproxyMap.get(left).handler.assign(left, right, assignThunk);
+        } else if (isVProxy(right) && unproxyMap.get(right).handler.assign) {
+            return unproxyMap.get(right).handler.assign(left, right, assignThunk);
+        } else {
+            return assignThunk();
         }
-        //return unproxyMap.get(cond).handler.test(cond, branchExit);
-      }
-      return cond;
+    }
+
+    function test(cond, branchExit) {
+        if (isVProxy(cond)) {
+            let hndl = unproxyMap.get(cond).handler;
+            if (hndl.test) {
+                return hndl.test(cond, branchExit);
+            }
+        }
+        return cond;
     }
 
     // @ (Any) -> {} or null
@@ -117,6 +127,7 @@ var vvalues = (function() {
     return {
         unary: unary,
         binary: binary,
+        assign: assign,
         test: test
     };
 })()
