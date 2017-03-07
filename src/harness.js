@@ -125,6 +125,22 @@ var vvalues = (function() {
         return ctxStack[ctxStack.length-1];
     }
 
+    function branch(cond, branchType, branches) {
+        if (!isVProxy(cond)) throw Exception("Branch called, but " + cond + " is not branchable");
+        var target = unproxyMap.get(cond).target;
+        let hndl = unproxyMap.get(cond).handler;
+        if (hndl.branch) {
+            return hndl.branch(target, branchType, branches);
+        }
+    }
+
+    function isBranchable(v) {
+        if (!isVProxy(v)) {
+            return false;
+        }
+        return !!unproxyMap.get(v).handler.branch;
+    }
+
     // @ (Any) -> {} or null
     this.unproxy = function(value, key) {
         if (isVProxy(value) && unproxyMap.get(value).key === key) {
@@ -137,8 +153,10 @@ var vvalues = (function() {
         unary: unary,
         binary: binary,
         assign: assign,
+        branch: branch,
         __pushContext: pushContext,
         __popContext: popContext,
         __peekContext: peekContext,
+        __isBranchable: isBranchable,
     };
 })()

@@ -32,6 +32,7 @@ operator | 6 left { $left, $right }           => #{ vvalues.binary("|", $left, $
 operator && 5 left { $left, $right }          => #{ vvalues.binary("&&", $left, $right) }
 operator || 4 left { $left, $right }          => #{ vvalues.binary("||", $left, $right) }
 
+/*
 let if = macro {
     rule { ($cond ...) { $body ...} } => {
         var c = $cond...;
@@ -48,6 +49,36 @@ let if = macro {
             $thnBody ...;
         } else {
             $elsBody ...;
+        }
+        if (pushedProxy) vvalues.__popContext();
+    }
+}
+*/
+
+let if = macro {
+    rule { ($cond ...) { $thnBody ...} else { $elsBody ... } } => {
+        var c = $cond...;
+        let pushedProxy = vvalues.__pushContext(c);
+        if (vvalues.__isBranchable(c)) {
+            var caseThunk = function() { return c; };
+            var bodyThunk = function() { $thnBody... };
+            vvalues.branch(c, 'if', [[caseThunk, bodyThunk]]);
+        } else if (c) {
+            $thnBody...;
+        } else {
+            $elsBody ...;
+        }
+        if (pushedProxy) vvalues.__popContext();
+    }
+    rule { ($cond ...) { $body ...} } => {
+        var c = $cond...;
+        let pushedProxy = vvalues.__pushContext(c);
+        if (vvalues.__isBranchable(c)) {
+            var caseThunk = function() { return c; };
+            var bodyThunk = function() { $body... };
+            vvalues.branch(c, 'if', [[caseThunk, bodyThunk]]);
+        } else if (c) {
+            $body...;
         }
         if (pushedProxy) vvalues.__popContext();
     }
