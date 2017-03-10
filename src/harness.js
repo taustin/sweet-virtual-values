@@ -154,9 +154,9 @@ var vvalues = (function() {
         binary: binary,
         assign: assign,
         branch: branch,
-        __pushContext: pushContext,
-        __popContext: popContext,
-        __peekContext: peekContext,
-        __isBranchable: isBranchable,
+        pushContext: pushContext,
+        popContext: popContext,
+        peekContext: peekContext,
+        isBranchable: isBranchable,
     };
 })()

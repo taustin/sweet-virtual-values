@@ -43,32 +43,39 @@ var binaryOps = {
 
 let facetKey = {};
 
+// Helper functions that I don't want to make public
+function getHigh(x) {
+    let p = unproxy(x, facetKey);
+    return p.highValue;
+}
+
+function getLow(x) {
+    let p = unproxy(x, facetKey);
+    return p.lowValue;
+}
+
+function isTruthyHigh(x) {
+    return !!getHigh(x);
+}
+
+function isTruthyLow(x) {
+    return !!getLow(x);
+}
+
 function faceted(hiVal, loVal) {
     if (isFaceted(loVal)) {
-        let p = unproxy(loVal, facetKey);
-        loVal = p.lowValue;
+        loVal = getLow(loVal);
     }
     if (isFaceted(hiVal)) {
-        let p = unproxy(hiVal, facetKey);
-        hiVal = p.highValue;
-    }
-
-    function isTruthyHigh(x) {
-        let p = unproxy(x, facetKey);
-        return !!p.highValue;
-    }
-
-    function isTruthyLow(x) {
-        let p = unproxy(x, facetKey);
-        return !!p.lowValue;
+        hiVal = getHigh(hiVal);
     }
 
     var p = new Proxy(loVal, {
         lowValue: loVal,
         highValue: hiVal,
         unary: function(target, op, operand) {
-            // FIXME: should we drop the operand altogether?  It is odd that we don't have a left/right version
-            let lo = unaryOps[op](target);
+            // FIXME: should we drop the operand arg altogether?  It is odd that we don't have a left/right version
+            let lo = unaryOps[op](loVal);
             let hi = unaryOps[op](hiVal);
             return faceted(hi, lo);
         },
@@ -87,49 +94,32 @@ function faceted(hiVal, loVal) {
                 if (isTruthyHigh(ctx) && isTruthyLow(ctx)) {
                     assignThunk();
                 } else if (isTruthyHigh(ctx)) {
-                    assignThunk(x=>faceted(x,left));
-                    /*
-                    assignThunk(function (x) {
-                        let old = left;
-                        console.log("Old value was " + old);
-                        console.log("New value is " + x);
-                        let fv = faceted(x,old);
-                        display(fv);
-                        return fv;
+                    assignThunk(function(x) {
+                        let l = isFaceted(left) ? getLow(left) : left;
+                        let h = isFaceted(x) ? getHigh(x): x;
+                        return faceted(h,l);
                     });
-                    */
                 } else if (isTruthyLow(ctx)) {
-                    assignThunk(x=>faceted(left,x));
+                    assignThunk(function(x) {
+                        let l = isFaceted(x) ? getLow(x) : x;
+                        let h = isFaceted(left) ? getHigh(left): left;
+                        return faceted(h,l);
+                    });
                 }
             } else {
                 assignThunk();
             }
         },
         branch: function(target, branchType, branches) {
-            var i=0;
-            if (branchType === 'if') {
-                var bodyThunk = branches[i][1];
-                if (hiVal && loVal) {
-                    // Both are true -- no need to facet execution
-                    bodyThunk();
-                } else if (hiVal) {
-                    bodyThunk();
-                } else if (loVal) {
+            let i=0;
+            while (i<branches.length) {
+                let test = branches[i][0];
+                let bodyThunk = branches[i][1];
+                // If either facet is true, the body needs to be executed
+                if (test(getHigh) || test(getLow)) {
                     bodyThunk();
                 }
-                //if (target) {
-                //    console.log("The magic is happening still!");
-                //    var bodyThunk = branches[i][1];
-                //    bodyThunk();
-                //}
-                /*
-                for (i in branches) {
-                    var cThunk = branches[i][0];
-                    var bodyThunk = branches[i][1];
-                    if (cThunk(target)) {
-                        return bodyThunk();
-                    }
-                //}*/
+                i += 1;
             }
         },
     }, facetKey);
@@ -161,12 +151,29 @@ display(y);
 var z = faceted(4 ,1);
 display(y + z);
 
-///
+// Testing implicit flow marking high facet
 var b = faceted(true, false);
 var pub = false;
 if (b) {
     pub = true;
 }
-
 display(pub);
+
+// Testing implicit flow marking low facet
+pub = false;
+if (!b) {
+    pub = true;
+}
+display(pub);
+
+
+// Implicit flows to both high and low facets
+var pub2 = 0;
+if (b) {
+    pub2 = 1;
+}
+else {
+    pub2 = 2;
+}
+display(pub2);
 

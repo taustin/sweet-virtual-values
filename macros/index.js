@@ -32,61 +32,48 @@ operator | 6 left { $left, $right }           => #{ vvalues.binary("|", $left, $
 operator && 5 left { $left, $right }          => #{ vvalues.binary("&&", $left, $right) }
 operator || 4 left { $left, $right }          => #{ vvalues.binary("||", $left, $right) }
 
-/*
-let if = macro {
-    rule { ($cond ...) { $body ...} } => {
-        var c = $cond...;
-        let pushedProxy = vvalues.__pushContext(c);
-        if (c) {
-            $body ...;
-        }
-        if (pushedProxy) vvalues.__popContext();
-    }
-    rule { ($cond ...) { $thnBody ...} else { $elsBody ... } } => {
-        let c = $cond...;
-        let pushedProxy = vvalues.__pushContext(c);
-        if (c) {
-            $thnBody ...;
-        } else {
-            $elsBody ...;
-        }
-        if (pushedProxy) vvalues.__popContext();
-    }
-}
-*/
 
 let if = macro {
-    rule { ($cond ...) { $thnBody ...} else { $elsBody ... } } => {
+    rule { ($cond ...) { $thnBody ...} else { $elsBody ...} } => {
         var c = $cond...;
-        let pushedProxy = vvalues.__pushContext(c);
-        if (vvalues.__isBranchable(c)) {
-            var caseThunk = function() { return c; };
-            var bodyThunk = function() { $thnBody... };
-            vvalues.branch(c, 'if', [[caseThunk, bodyThunk]]);
+        let pushedProxy = vvalues.pushContext(c);
+        if (vvalues.isBranchable(c)) {
+            var caseTrueThunk = function(f) { return f ? f(c): c; };
+            var thnThunk = function() {
+                $thnBody...
+                vvalues.popContext();
+            };
+            var caseFalseThunk = function(f) { return !caseTrueThunk(f); };
+            var elsThunk = function() {
+                vvalues.pushContext(!c);
+                $elsBody...
+            };
+            vvalues.branch(c, 'if', [[caseTrueThunk, thnThunk],
+                                     [caseFalseThunk, elsThunk]]);
         } else if (c) {
             $thnBody...;
         } else {
-            $elsBody ...;
+            $elsBody...;
         }
-        if (pushedProxy) vvalues.__popContext();
+        if (pushedProxy) vvalues.popContext();
     }
     rule { ($cond ...) { $body ...} } => {
         var c = $cond...;
-        let pushedProxy = vvalues.__pushContext(c);
-        if (vvalues.__isBranchable(c)) {
-            var caseThunk = function() { return c; };
+        let pushedProxy = vvalues.pushContext(c);
+        if (vvalues.isBranchable(c)) {
+            var caseThunk = function(f) { return f ? f(c): c; };
             var bodyThunk = function() { $body... };
             vvalues.branch(c, 'if', [[caseThunk, bodyThunk]]);
         } else if (c) {
             $body...;
         }
-        if (pushedProxy) vvalues.__popContext();
+        if (pushedProxy) vvalues.popContext();
     }
 }
 
 let = = macro {
     rule infix { $left:expr | $right:expr } => {
-        let ctx = vvalues.__peekContext();
+        let ctx = vvalues.peekContext();
         vvalues.assign(ctx, $left, $right, (polisher) => {
             if (polisher) {
                 $left = polisher($right);
