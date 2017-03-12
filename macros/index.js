@@ -71,6 +71,21 @@ let if = macro {
     }
 }
 
+macro while {
+    rule { ($cond ...) { $body ...} } => {
+        var condTest = function() { return $cond...; };
+        var bodyThunk = function() {
+            $body...
+            if (condTest()) {
+                bodyThunk();
+            }
+        };
+        if (condTest()) {
+            bodyThunk();
+        }
+    }
+}
+
 let = = macro {
     rule infix { $left:expr | $right:expr } => {
         let ctx = vvalues.peekContext();

@@ -177,3 +177,14 @@ else {
 }
 display(pub2);
 
+// Implicit leak in a while loop
+var numPasses = 0;
+// Note: pub2 now has a secret facet from the previous if/else branch
+while (pub2 < 10) {
+    numPasses = numPasses + 1;
+    pub2 = pub2 + 1;
+}
+display(pub2);
+display(numPasses);
+
+
