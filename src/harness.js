@@ -125,12 +125,12 @@ var vvalues = (function() {
         return ctxStack[ctxStack.length-1];
     }
 
-    function branch(cond, branchType, branches) {
+    function branch(cond, test, thenBranch, elseBranch) {
         if (!isVProxy(cond)) throw Exception("Branch called, but " + cond + " is not branchable");
         var target = unproxyMap.get(cond).target;
         let hndl = unproxyMap.get(cond).handler;
         if (hndl.branch) {
-            return hndl.branch(target, branchType, branches);
+            return hndl.branch(target, test, thenBranch, elseBranch);
         }
     }
 

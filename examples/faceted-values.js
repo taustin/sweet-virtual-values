@@ -110,16 +110,14 @@ function faceted(hiVal, loVal) {
                 assignThunk();
             }
         },
-        branch: function(target, branchType, branches) {
-            let i=0;
-            while (i<branches.length) {
-                let test = branches[i][0];
-                let bodyThunk = branches[i][1];
-                // If either facet is true, the body needs to be executed
-                if (test(getHigh) || test(getLow)) {
-                    bodyThunk();
-                }
-                i += 1;
+        branch: function(target, test, thenThunk, elseThunk) {
+            var c = test();
+            if (isTruthyHigh(c) || isTruthyLow(c)) {
+                // If either facet is true, the then branch needs to be executed
+                thenThunk();
+            } else if (elseThunk && !(isTruthyHigh(c) && isTruthyLow(c))) {
+                // If either facet is false...
+                elseThunk();
             }
         },
     }, facetKey);

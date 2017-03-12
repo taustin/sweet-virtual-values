@@ -38,18 +38,16 @@ let if = macro {
         var c = $cond...;
         let pushedProxy = vvalues.pushContext(c);
         if (vvalues.isBranchable(c)) {
-            var caseTrueThunk = function(f) { return f ? f(c): c; };
+            var testThunk = function() { return c; };
             var thnThunk = function() {
                 $thnBody...
                 vvalues.popContext();
             };
-            var caseFalseThunk = function(f) { return !caseTrueThunk(f); };
             var elsThunk = function() {
                 vvalues.pushContext(!c);
                 $elsBody...
             };
-            vvalues.branch(c, 'if', [[caseTrueThunk, thnThunk],
-                                     [caseFalseThunk, elsThunk]]);
+            vvalues.branch(c, testThunk, thnThunk, elsThunk);
         } else if (c) {
             $thnBody...;
         } else {
@@ -61,9 +59,9 @@ let if = macro {
         var c = $cond...;
         let pushedProxy = vvalues.pushContext(c);
         if (vvalues.isBranchable(c)) {
-            var caseThunk = function(f) { return f ? f(c): c; };
+            var testThunk = function() { return c; };
             var bodyThunk = function() { $body... };
-            vvalues.branch(c, 'if', [[caseThunk, bodyThunk]]);
+            vvalues.branch(c, testThunk, bodyThunk);
         } else if (c) {
             $body...;
         }
