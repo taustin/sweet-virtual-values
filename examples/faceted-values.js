@@ -43,82 +43,102 @@ var binaryOps = {
 
 let facetKey = {};
 
-// Helper functions that I don't want to make public
-function getHigh(x) {
-    let p = unproxy(x, facetKey);
-    return p.highValue;
-}
-
-function getLow(x) {
-    let p = unproxy(x, facetKey);
-    return p.lowValue;
-}
-
-function isTruthyHigh(x) {
-    return !!getHigh(x);
-}
-
-function isTruthyLow(x) {
-    return !!getLow(x);
-}
-
-function faceted(hiVal, loVal) {
-    if (isFaceted(loVal)) {
-        loVal = getLow(loVal);
+function getView(vv, labels) {
+    if (!isFaceted(vv)) {
+        return vv;
     }
-    if (isFaceted(hiVal)) {
-        hiVal = getHigh(hiVal);
+    let p = unproxy(vv, facetKey);
+    if (labels.indexOf(p.label) !== -1) {
+        return getView(p.highValue, labels);
+    } else if (labels.indexOf("!" + p.label) !== -1) {
+        return getView(p.lowValue, labels);
+    } else {
+        return faceted(p.label,
+            getView(p.highValue, labels),
+            getView(p.lowValue, labels));
     }
+}
 
+function hasMatchingFacet(vv, fn) {
+    if (!isFaceted(vv)) {
+        return fn(vv);
+    }
+    let p = unproxy(vv, facetKey);
+    return hasMatchingFacet(p.highValue, fn) ? true: hasMatchingFacet(p.lowValue, fn);
+}
+
+let pcStack = [];
+
+function execForMatchingViews(cond, thenThunk, elseThunk) {
+    if (!isFaceted(cond)) {
+        if (cond) {
+            return thenThunk();
+        } else if (elseThunk) {
+            return elseThunk();
+        }
+        return;
+    }
+    let p = unproxy(cond, facetKey);
+    // Don't execute dead branches of code
+    if (pcStack.indexOf("!" + p.label) === -1) {
+        pcStack.push(p.label);
+        execForMatchingViews(p.highValue, thenThunk, elseThunk);
+        pcStack.pop();
+    }
+    // Don't execute dead branches of code
+    if (pcStack.indexOf(p.label) === -1) {
+        pcStack.push("!" + p.label);
+        execForMatchingViews(p.lowValue, thenThunk, elseThunk);
+        pcStack.pop();
+    }
+}
+
+function makeFV(labels, valToSet, defaultVal) {
+    if (labels.length === 0) {
+        return valToSet;
+    }
+    let lab = labels[0];
+    let rest = labels.slice(1);
+    if (lab.startsWith("!")) {
+        return faceted(lab.slice(1), defaultVal, makeFV(rest, valToSet, defaultVal));
+    } else {
+        return faceted(lab, makeFV(rest, valToSet, defaultVal), defaultVal);
+    }
+}
+
+function faceted(label, hiVal, loVal) {
     var p = new Proxy(loVal, {
-        lowValue: loVal,
-        highValue: hiVal,
-        unary: function(target, op, operand) {
-            // FIXME: should we drop the operand arg altogether?  It is odd that we don't have a left/right version
-            let lo = unaryOps[op](loVal);
-            let hi = unaryOps[op](hiVal);
-            return faceted(hi, lo);
+        label: label,
+        lowValue: getView(loVal, ["!" + label]),
+        highValue: getView(hiVal, [label]),
+        unary: function(target, op) {
+            let h = unproxy(p, facetKey);
+            let lo = unaryOps[op](h.lowValue);
+            let hi = unaryOps[op](h.highValue);
+            return faceted(label, hi, lo);
         },
         left: function(target, op, right) {
+            let h = unproxy(p, facetKey);
             let lo = binaryOps[op](target, right);
-            let hi = binaryOps[op](hiVal, right);
-            return faceted(hi, lo);
+            let hi = binaryOps[op](h.highValue, right);
+            return faceted(label, hi, lo);
         },
         right: function(target, op, left) {
+            let h = unproxy(p, facetKey);
             let lo = binaryOps[op](left, target);
-            let hi = binaryOps[op](left, hiVal);
-            return faceted(hi, lo);
+            let hi = binaryOps[op](left, h.highValue);
+            return faceted(label, hi, lo);
         },
         assign: function(ctx, left, right, assignThunk) {
             if (isFaceted(ctx)) {
-                if (isTruthyHigh(ctx) && isTruthyLow(ctx)) {
-                    assignThunk();
-                } else if (isTruthyHigh(ctx)) {
-                    assignThunk(function(x) {
-                        let l = isFaceted(left) ? getLow(left) : left;
-                        let h = isFaceted(x) ? getHigh(x): x;
-                        return faceted(h,l);
-                    });
-                } else if (isTruthyLow(ctx)) {
-                    assignThunk(function(x) {
-                        let l = isFaceted(x) ? getLow(x) : x;
-                        let h = isFaceted(left) ? getHigh(left): left;
-                        return faceted(h,l);
-                    });
-                }
+                assignThunk(x => makeFV(pcStack,x,left));
             } else {
                 assignThunk();
             }
         },
         branch: function(target, test, thenThunk, elseThunk) {
             var c = test();
-            if (isTruthyHigh(c) || isTruthyLow(c)) {
-                // If either facet is true, the then branch needs to be executed
-                thenThunk();
-            } else if (elseThunk && !(isTruthyHigh(c) && isTruthyLow(c))) {
-                // If either facet is false...
-                elseThunk();
-            }
+            execForMatchingViews(c, thenThunk, elseThunk);
         },
     }, facetKey);
     return p;
@@ -128,29 +148,38 @@ function isFaceted(x) {
     return !!unproxy(x, facetKey);
 }
 
-function display(v) {
+function valToString(v) {
     if (isFaceted(v)) {
         let p = unproxy(v, facetKey);
-        console.log("< " + p.highValue + " : " + p.lowValue + " >");
+        return "< " + p.label + " ? " + valToString(p.highValue) + " : " + valToString(p.lowValue) + " >";
     } else {
-        console.log(v);
+        return "" + v;
     }
 }
 
+function display(v) {
+    console.log(valToString(v));
+}
 
-var i = faceted(42, 0);
+
+var i = faceted('k', 42, 0);
 display(i);
 var x = ++i;
 display(x);
 
+// Testing nested virtual values
+var j = faceted("k", faceted("j", 1, 2), faceted("j", 3, 4));
+display(j);
+display(++j);
+
 var y = 3 + x;
 display(y);
 
-var z = faceted(4 ,1);
+var z = faceted('k', 4, 1);
 display(y + z);
 
 // Testing implicit flow marking high facet
-var b = faceted(true, false);
+var b = faceted("k", true, false);
 var pub = false;
 if (b) {
     pub = true;
@@ -163,7 +192,6 @@ if (!b) {
     pub = true;
 }
 display(pub);
-
 
 // Implicit flows to both high and low facets
 var pub2 = 0;
